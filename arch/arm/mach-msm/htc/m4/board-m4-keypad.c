@@ -41,10 +41,12 @@ static void config_gpio_table(uint32_t *table, int len)
 }
 
 static struct gpio_event_direct_entry m4_keypad_input_map[] = {
+#ifndef CONFIG_INPUT_PMIC8XXX_PWRKEY
 	{
 		.gpio = MSM_PWR_KEY_MSMz,
 		.code = KEY_POWER,
 	},
+#endif
 	{
 		.gpio = MSM_VOL_UPz,
 		.code = KEY_VOLUMEUP,
