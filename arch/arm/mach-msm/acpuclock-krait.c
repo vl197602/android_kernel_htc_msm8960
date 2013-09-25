@@ -46,6 +46,31 @@
 
 #define SECCLKAGD		BIT(4)
 
+#ifdef CONFIG_MACH_HTC
+#define CPU_FOOT_PRINT_MAGIC			0xACBDFE00
+#define CPU_FOOT_PRINT_BASE_CPU0_VIRT		(MSM_KERNEL_FOOTPRINT_BASE + 0x0)
+static void set_acpuclk_foot_print(unsigned cpu, unsigned state)
+{
+	unsigned *status = (unsigned *)(CPU_FOOT_PRINT_BASE_CPU0_VIRT + 0x6C) + cpu;
+	*status = (CPU_FOOT_PRINT_MAGIC | state);
+	mb();
+}
+
+static void set_acpuclk_cpu_freq_foot_print(unsigned cpu, unsigned khz)
+{
+	unsigned *status = (unsigned *)(CPU_FOOT_PRINT_BASE_CPU0_VIRT + 0x58) + cpu;
+	*status = khz;
+	mb();
+}
+
+static void set_acpuclk_L2_freq_foot_print(unsigned khz)
+{
+	unsigned *status = (unsigned *)(CPU_FOOT_PRINT_BASE_CPU0_VIRT + 0x68);
+	*status = khz;
+	mb();
+}
+#endif /* CONFIG_MACH_HTC */
+
 static DEFINE_MUTEX(driver_lock);
 static DEFINE_SPINLOCK(l2_lock);
 
@@ -490,11 +515,19 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 	bool skip_regulators;
 	int rc = 0;
 
+#ifdef CONFIG_MACH_HTC
+	set_acpuclk_foot_print(cpu, 0x1);
+#endif
+
 	if (cpu > num_possible_cpus())
 		return -EINVAL;
 
 	if (reason == SETRATE_CPUFREQ || reason == SETRATE_HOTPLUG)
 		mutex_lock(&driver_lock);
+
+#ifdef CONFIG_MACH_HTC
+	set_acpuclk_foot_print(cpu, 0x2);
+#endif
 
 	strt_acpu_s = drv.scalable[cpu].cur_speed;
 
@@ -542,6 +575,10 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 		}
 	}
 
+#ifdef CONFIG_MACH_HTC
+	set_acpuclk_foot_print(cpu, 0x3);
+#endif
+
 	dev_dbg(drv.dev, "Switching from ACPU%d rate %lu KHz -> %lu KHz\n",
 		cpu, strt_acpu_s->khz, tgt_acpu_s->khz);
 
@@ -557,6 +594,11 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 	/* Set the new CPU speed. */
 	set_speed(&drv.scalable[cpu], tgt_acpu_s, skip_regulators);
 
+#ifdef CONFIG_MACH_HTC
+	set_acpuclk_cpu_freq_foot_print(cpu, tgt_acpu_s->khz);
+	set_acpuclk_foot_print(cpu, 0x4);
+#endif
+
 	/*
 	 * Update the L2 vote and apply the rate change. A spinlock is
 	 * necessary to ensure L2 rate is calculated and set atomically
@@ -569,6 +611,11 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 	set_speed(&drv.scalable[L2],
 			&drv.l2_freq_tbl[tgt_l2_l].speed, true);
 	spin_unlock(&l2_lock);
+
+#ifdef CONFIG_MACH_HTC
+	set_acpuclk_L2_freq_foot_print(drv.l2_freq_tbl[tgt_l2_l].speed.khz);
+	set_acpuclk_foot_print(cpu, 0x5);
+#endif
 
 	/* Nothing else to do for power collapse or SWFI. */
 	if (reason == SETRATE_PC || reason == SETRATE_SWFI)
@@ -584,8 +631,16 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 	/* Update bus bandwith request. */
 	set_bus_bw(drv.l2_freq_tbl[tgt_l2_l].bw_level);
 
+#ifdef CONFIG_MACH_HTC
+	set_acpuclk_foot_print(cpu, 0x6);
+#endif
+
 	/* Drop VDD levels if we can. */
 	decrease_vdd(cpu, &vdd_data, reason);
+
+#ifdef CONFIG_MACH_HTC
+	set_acpuclk_foot_print(cpu, 0x7);
+#endif
 
 	/* Re-enable AVS */
 	if (reason == SETRATE_CPUFREQ && tgt->avsdscr_setting) {
@@ -598,6 +653,11 @@ static int acpuclk_krait_set_rate(int cpu, unsigned long rate,
 out:
 	if (reason == SETRATE_CPUFREQ || reason == SETRATE_HOTPLUG)
 		mutex_unlock(&driver_lock);
+
+#ifdef CONFIG_MACH_HTC
+	set_acpuclk_foot_print(cpu, 0x8);
+#endif
+
 	return rc;
 }
 

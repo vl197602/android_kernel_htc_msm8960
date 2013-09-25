@@ -36,6 +36,21 @@
 
 extern void msm_secondary_startup(void);
 
+#ifdef CONFIG_MACH_HTC
+#define CPU0_EXIT_KERNEL_COUNTER_BASE			(MSM_KERNEL_FOOTPRINT_BASE + 0x10)
+#define CPU1_EXIT_KERNEL_COUNTER_BASE			(MSM_KERNEL_FOOTPRINT_BASE + 0x14)
+#define CPU2_EXIT_KERNEL_COUNTER_BASE			(MSM_KERNEL_FOOTPRINT_BASE + 0x18)
+#define CPU3_EXIT_KERNEL_COUNTER_BASE			(MSM_KERNEL_FOOTPRINT_BASE + 0x1C)
+static void init_cpu_debug_counter_for_cold_boot(void)
+{
+	*(unsigned *)CPU0_EXIT_KERNEL_COUNTER_BASE = 0x0;
+	*(unsigned *)CPU1_EXIT_KERNEL_COUNTER_BASE = 0x0;
+	*(unsigned *)CPU2_EXIT_KERNEL_COUNTER_BASE = 0x0;
+	*(unsigned *)CPU3_EXIT_KERNEL_COUNTER_BASE = 0x0;
+	mb();
+}
+#endif /* CONFIG_MACH_HTC */
+
 /*
  * control for which core is the next to come out of the secondary
  * boot "holding pen".
@@ -223,6 +238,9 @@ int __cpuinit boot_secondary(unsigned int cpu, struct task_struct *idle)
 			printk(KERN_DEBUG "Failed to set secondary core boot "
 					  "address\n");
 		per_cpu(cold_boot_done, cpu) = true;
+#ifdef CONFIG_MACH_HTC
+		init_cpu_debug_counter_for_cold_boot();
+#endif
 	}
 
 	/*
